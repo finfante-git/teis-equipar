@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revisor TEIS — Equipar</title>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+  :root {
+    --gd: #1A5C38; --gm: #2E7D4F; --gl: #E8F5EE; --gp: #C8E6D4;
+    --gch: #1D9E75; --gt: #5DCAA5;
+    --red: #E24B4A; --redl: #FCEBEB; --redm: #A32D2D;
+    --amber: #F9A825; --amberl: #FFF8E1;
+    --gray1: #333; --gray2: #555; --gray3: #888; --gray4: #ccc; --gray5: #f7f7f7;
+    --white: #fff; --radius: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: #f0f4f2; color: var(--gray1); min-height: 100vh; }
+
+  /* ── HEADER ── */
+  .app-header { background: var(--gd); color: white; padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
+  .logo-circle { background: var(--gm); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .header-title { font-size: 17px; font-weight: 600; }
+  .header-sub { font-size: 12px; color: var(--gp); margin-top: 2px; }
+  .header-right { margin-left: auto; font-size: 11px; color: var(--gp); text-align: right; }
+
+  /* ── LAYOUT ── */
+  .app-body { max-width: 960px; margin: 0 auto; padding: 24px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media(max-width:680px){ .app-body { grid-template-columns: 1fr; } }
+
+  /* ── CARDS ── */
+  .card { background: var(--white); border-radius: var(--radius-lg); border: 0.5px solid var(--gray4); padding: 18px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--gd); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+  .card-title svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* ── SETUP ── */
+  .setup-field { margin-bottom: 12px; }
+  .setup-field label { font-size: 11px; font-weight: 600; color: var(--gray2); display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .3px; }
+  .setup-field input { width: 100%; padding: 8px 10px; border: 0.5px solid var(--gray4); border-radius: var(--radius); font-size: 12px; color: var(--gray1); background: var(--gray5); }
+  .setup-field input:focus { outline: none; border-color: var(--gm); background: white; }
+  .setup-hint { font-size: 10px; color: var(--gray3); margin-top: 3px; line-height: 1.4; }
+  .save-btn { width: 100%; padding: 9px; background: var(--gd); color: white; border: none; border-radius: var(--radius); font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+  .save-btn:hover { background: var(--gm); }
+  .setup-ok { background: var(--gl); border: 0.5px solid var(--gch); border-radius: var(--radius); padding: 8px 12px; font-size: 11px; color: var(--gm); display: none; margin-top: 8px; }
+
+  /* ── DROP ZONE ── */
+  .drop-zone { border: 1.5px dashed var(--gray4); border-radius: var(--radius); padding: 28px 16px; text-align: center; cursor: pointer; background: var(--gray5); transition: all .15s; margin-bottom: 12px; }
+  .drop-zone:hover, .drop-zone.drag { background: var(--gl); border-color: var(--gch); }
+  .drop-zone svg { width: 32px; height: 32px; color: var(--gd); margin-bottom: 8px; }
+  .drop-text { font-size: 13px; color: var(--gray1); font-weight: 500; }
+  .drop-hint { font-size: 11px; color: var(--gray3); margin-top: 3px; }
+  #file-input { display: none; }
+
+  /* ── STATUS ── */
+  .status { border-radius: var(--radius); padding: 10px 14px; font-size: 12px; margin-bottom: 12px; display: none; line-height: 1.5; }
+  .status.loading { background: var(--gl); border: 0.5px solid var(--gch); color: var(--gm); display: flex; align-items: center; gap: 10px; }
+  .status.error { background: var(--redl); border: 0.5px solid var(--red); color: var(--redm); }
+  .status.warn { background: var(--amberl); border: 0.5px solid var(--amber); color: #7B5800; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--gp); border-top-color: var(--gd); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RESULT ── */
+  .result-card { border-radius: var(--radius); padding: 14px; margin-bottom: 12px; display: none; }
+  .result-card.pass { background: var(--gl); border: 0.5px solid var(--gch); }
+  .result-card.fail { background: var(--redl); border: 0.5px solid var(--red); }
+  .result-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .result-name { font-size: 13px; font-weight: 600; color: var(--gray1); }
+  .result-meta { font-size: 11px; color: var(--gray3); margin-top: 2px; }
+  .result-score { font-size: 26px; font-weight: 700; }
+  .score-pass { color: var(--gd); }
+  .score-fail { color: var(--red); }
+  .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px; }
+  .field-item { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+  .field-item.ok { color: #0F6E56; }
+  .field-item.no { color: var(--redm); }
+  .field-icon { width: 14px; height: 14px; flex-shrink: 0; }
+  .obs-text { font-size: 11px; color: var(--gray2); padding-top: 8px; border-top: 0.5px solid var(--gray4); }
+  .new-btn { width: 100%; padding: 8px; border: 0.5px solid var(--gray4); background: white; border-radius: var(--radius); font-size: 11px; cursor: pointer; margin-top: 10px; color: var(--gray2); }
+  .new-btn:hover { background: var(--gray5); }
+
+  /* ── METRICS ── */
+  .metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+  .metric { background: var(--gray5); border-radius: var(--radius); padding: 12px; text-align: center; }
+  .metric-val { font-size: 26px; font-weight: 700; color: var(--gray1); }
+  .metric-val.green { color: var(--gd); }
+  .metric-val.red { color: var(--red); }
+  .metric-lbl { font-size: 10px; color: var(--gray3); margin-top: 3px; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: var(--gray5); padding: 7px 10px; text-align: left; font-weight: 600; font-size: 10px; color: var(--gray3); border-bottom: 0.5px solid var(--gray4); text-transform: uppercase; letter-spacing: .3px; }
+  td { padding: 7px 10px; border-bottom: 0.5px solid var(--gray4); color: var(--gray1); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--gray5); }
+  .badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .badge.pass { background: var(--gl); color: #0F6E56; }
+  .badge.fail { background: var(--redl); color: var(--redm); }
+  .empty-state { text-align: center; padding: 32px; color: var(--gray3); font-size: 12px; }
+  .empty-state svg { width: 28px; height: 28px; margin-bottom: 8px; opacity: .4; }
+  .clear-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  .clear-btn { font-size: 10px; color: var(--gray3); background: none; border: none; cursor: pointer; padding: 0; }
+  .clear-btn:hover { color: var(--red); }
+
+  /* ── FULL WIDTH SECTION ── */
+  .full-width { grid-column: 1 / -1; }
+
+  /* ── MONTH SELECTOR ── */
+  .month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .month-row select { padding: 6px 10px; border: 0.5px solid var(--gray4); border-radius: var(--radius); font-size: 12px; color: var(--gray1); background: white; cursor: pointer; }
+  .month-row select:focus { outline: none; border-color: var(--gm); }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo-circle">EQ</div>
+  <div>
+    <div class="header-title">Revisor TEIS — Informes de Servicio</div>
+    <div class="header-sub">Equipar S.A. de C.V. · Servicio Técnico</div>
+  </div>
+  <div class="header-right" id="header-status">Configuración pendiente</div>
+</header>
+
+<div class="app-body">
+
+  <!-- CONFIGURACIÓN -->
+  <div class="card" id="setup-card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Configuración inicial
+    </div>
+    <div class="setup-field">
+      <label>Anthropic API Key</label>
+      <input type="password" id="anthropic-key" placeholder="sk-ant-..." autocomplete="off">
+      <div class="setup-hint">Obtén tu key en console.anthropic.com → API Keys. Se guarda solo en este navegador.</div>
+    </div>
+    <div class="setup-field">
+      <label>Airtable Personal Access Token</label>
+      <input type="password" id="airtable-token" placeholder="pat..." autocomplete="off">
+      <div class="setup-hint">En airtable.com → Account → Developer Hub → Personal access tokens.</div>
+    </div>
+    <div class="setup-field">
+      <label>Airtable Base ID</label>
+      <input type="text" id="airtable-base" placeholder="appXXXXXXXXXXXXXX">
+      <div class="setup-hint">En la URL de tu base: airtable.com/appXXXX/...</div>
+    </div>
+    <div class="setup-field">
+      <label>Nombre de la tabla en Airtable</label>
+      <input type="text" id="airtable-table" placeholder="TEIS" value="Informes de Servicio Técnico">
+    </div>
+    <button class="save-btn" onclick="saveConfig()">Guardar configuración</button>
+    <div class="setup-ok" id="setup-ok">✓ Configuración guardada. Puedes analizar reportes.</div>
+  </div>
+
+  <!-- ANALIZADOR -->
+  <div class="card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Analizar reporte
+    </div>
+    <div class="drop-zone" id="dz" onclick="document.getElementById('file-input').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="drop-text" id="dz-text">Arrastra el PDF aquí o haz clic</div>
+      <div class="drop-hint">Solo archivos PDF · Un reporte a la vez</div>
+    </div>
+    <input type="file" id="file-input" accept=".pdf">
+
+    <div class="status loading" id="st-loading">
+      <div class="spinner"></div>
+      <span id="st-text">Procesando...</span>
+    </div>
+    <div class="status error" id="st-error"></div>
+    <div class="status warn" id="st-warn"></div>
+
+    <div class="result-card" id="result-card">
+      <div class="result-top">
+        <div>
+          <div class="result-name" id="r-name"></div>
+          <div class="result-meta" id="r-meta"></div>
+        </div>
+        <div class="result-score" id="r-score"></div>
+      </div>
+      <div class="fields-grid" id="r-fields"></div>
+      <div class="obs-text" id="r-obs"></div>
+      <button class="new-btn" onclick="resetAnalyzer()">+ Analizar otro reporte</button>
+    </div>
+  </div>
+
+  <!-- REGISTRO COMPLETO -->
+  <div class="card full-width">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="3"/></svg>
+      Registro TEIS
+    </div>
+
+    <div class="month-row">
+      <label style="font-size:11px;color:var(--gray3);font-weight:600">MES:</label>
+      <select id="month-filter" onchange="filterByMonth()">
+        <option value="all">Todos los registros</option>
+      </select>
+      <div class="clear-row" style="margin:0 0 0 auto">
+        <button class="clear-btn" onclick="clearAll()">Limpiar registro</button>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="metric-val" id="m-total">0</div><div class="metric-lbl">Revisados</div></div>
+      <div class="metric"><div class="metric-val green" id="m-pass">0</div><div class="metric-lbl">Completos 6/6</div></div>
+      <div class="metric"><div class="metric-val" id="m-teis">—</div><div class="metric-lbl">TEIS del período</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="empty-state" id="empty-st">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12H2M22 12l-4-4M22 12l-4 4"/></svg>
+        <div>Aún no hay reportes registrados.</div>
+        <div style="margin-top:4px;font-size:11px">Sube el primer PDF para comenzar.</div>
+      </div>
+      <table id="tbl" style="display:none">
+        <thead><tr>
+          <th>QIS</th><th>Cliente</th><th>Técnico</th><th>Fecha</th>
+          <th>Equipo</th><th style="text-align:center">Score</th><th style="text-align:center">Estado</th>
+        </tr></thead>
+        <tbody id="tbl-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+const FIELDS = [
+  {k:'qis',      l:'Núm. pedido QIS'},
+  {k:'equipo',   l:'Datos del equipo'},
+  {k:'trabajo',  l:'Trabajo efectuado'},
+  {k:'resultado',l:'Resultado / conclusiones'},
+  {k:'firma',    l:'Firma del técnico'},
+  {k:'prox',     l:'Próximo mantenimiento'},
+];
+
+let records = [];
+let busy = false;
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+function saveConfig() {
+  const ak = document.getElementById('anthropic-key').value.trim();
+  const at = document.getElementById('airtable-token').value.trim();
+  const ab = document.getElementById('airtable-base').value.trim();
+  const tbl = document.getElementById('airtable-table').value.trim();
+  if (!ak || !at || !ab || !tbl) { alert('Completa todos los campos de configuración.'); return; }
+  localStorage.setItem('eq_ak', ak);
+  localStorage.setItem('eq_at', at);
+  localStorage.setItem('eq_ab', ab);
+  localStorage.setItem('eq_tbl', tbl);
+  document.getElementById('setup-ok').style.display = 'block';
+  document.getElementById('header-status').textContent = 'Configurado ✓';
+}
+
+function loadConfig() {
+  const ak = localStorage.getItem('eq_ak');
+  const at = localStorage.getItem('eq_at');
+  const ab = localStorage.getItem('eq_ab');
+  const tbl = localStorage.getItem('eq_tbl');
+  if (ak) document.getElementById('anthropic-key').value = ak;
+  if (at) document.getElementById('airtable-token').value = at;
+  if (ab) document.getElementById('airtable-base').value = ab;
+  if (tbl) document.getElementById('airtable-table').value = tbl;
+  if (ak && at && ab && tbl) {
+    document.getElementById('setup-ok').style.display = 'block';
+    document.getElementById('header-status').textContent = 'Configurado ✓';
+  }
+}
+
+function getConfig() {
+  return {
+    ak:  localStorage.getItem('eq_ak')  || '',
+    at:  localStorage.getItem('eq_at')  || '',
+    ab:  localStorage.getItem('eq_ab')  || '',
+    tbl: localStorage.getItem('eq_tbl') || 'TEIS',
+  };
+}
+
+// ── PDF EXTRACTION ─────────────────────────────────────────────────────────────
+async function extractText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(' ') + '\n';
+  }
+  return text.trim();
+}
+
+// ── CLAUDE API ─────────────────────────────────────────────────────────────────
+async function analyzeWithClaude(text, fileName) {
+  const { ak } = getConfig();
+  if (!ak) throw new Error('Falta la API Key de Anthropic en configuración.');
+
+  const prompt = `Analiza este informe de servicio técnico de Equipar y devuelve SOLO JSON válido sin texto extra ni backticks:
+{"qis":bool,"qis_valor":"","equipo":bool,"equipo_valor":"marca/modelo/serie","trabajo":bool,"resultado":bool,"firma":bool,"firma_valor":"nombre","prox":bool,"prox_valor":"","cliente":"","fecha":"DD/MM/AA","observacion":""}
+Criterios:
+- qis: número QIS o de servicio/folio en el encabezado
+- equipo: marca + modelo + serie presentes los tres
+- trabajo: lista de actividades realizadas
+- resultado: conclusiones o resultado de pruebas
+- firma: nombre del técnico que realizó el servicio
+- prox: mención de próximo mantenimiento en cualquier sección
+REPORTE:
+${text.substring(0, 3500)}`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ak,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system: 'Eres revisor de calidad. Responde SOLO con JSON válido.',
+      messages: [{role: 'user', content: prompt}]
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error('Claude API ' + resp.status + ': ' + (err?.error?.message || resp.statusText));
+  }
+  const data = await resp.json();
+  const raw = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  return JSON.parse(raw.replace(/```json|```/g, '').trim());
+}
+
+// ── AIRTABLE ───────────────────────────────────────────────────────────────────
+async function saveToAirtable(record) {
+  const { at, ab, tbl } = getConfig();
+  if (!at || !ab) return; // silently skip if not configured
+
+  const fields = {
+    'QIS':      record.qis,
+    'Cliente':  record.cliente,
+    'Técnico':  record.tecnico,
+    'Fecha':    record.fecha,
+    'Equipo':   record.equipo_valor,
+    'Score':    record.score,
+    'Completo': record.score === 6,
+    'Observación': record.observacion || '',
+    'QIS_1': record.fields.qis,
+    'Equipo_campo': record.fields.equipo,
+    'Trabajo': record.fields.trabajo,
+    'Resultado': record.fields.resultado,
+    'Firma': record.fields.firma,
+    'Prox_Mant': record.fields.prox,
+  };
+
+  try {
+    await fetch(`https://api.airtable.com/v0/${ab}/${encodeURIComponent(tbl)}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${at}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fields })
+    });
+  } catch(e) {
+    console.warn('Airtable save failed:', e.message);
+  }
+}
+
+// ── LOCAL STORAGE ─────────────────────────────────────────────────────────────
+function loadRecords() {
+  try {
+    const r = localStorage.getItem('eq_records');
+    if (r) records = JSON.parse(r);
+  } catch(e) { records = []; }
+  buildMonthFilter();
+  renderTable('all');
+}
+
+function saveRecords() {
+  try { localStorage.setItem('eq_records', JSON.stringify(records)); } catch(e) {}
+}
+
+function clearAll() {
+  if (!confirm('¿Limpiar el registro local? Los datos en Airtable no se borran.')) return;
+  records = [];
+  saveRecords();
+  buildMonthFilter();
+  renderTable('all');
+  document.getElementById('result-card').style.display = 'none';
+}
+
+// ── MONTH FILTER ──────────────────────────────────────────────────────────────
+function buildMonthFilter() {
+  const sel = document.getElementById('month-filter');
+  const months = [...new Set(records.map(r => r.fecha ? r.fecha.substring(3) : ''))].filter(Boolean).sort();
+  sel.innerHTML = '<option value="all">Todos los registros</option>' +
+    months.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+function filterByMonth() {
+  const val = document.getElementById('month-filter').value;
+  renderTable(val);
+}
+
+// ── RENDER TABLE ──────────────────────────────────────────────────────────────
+function renderTable(monthFilter) {
+  const filtered = monthFilter === 'all' ? records :
+    records.filter(r => r.fecha && r.fecha.substring(3) === monthFilter);
+
+  const total = filtered.length;
+  const pass  = filtered.filter(r => r.score === 6).length;
+  const teis  = total > 0 ? Math.round((pass / total) * 100) : null;
+
+  document.getElementById('m-total').textContent = total;
+  document.getElementById('m-pass').textContent  = pass;
+  const te = document.getElementById('m-teis');
+  te.textContent  = teis !== null ? teis + '%' : '—';
+  te.className    = 'metric-val' + (teis !== null ? (teis >= 85 ? ' green' : ' red') : '');
+
+  const empty = document.getElementById('empty-st');
+  const tbl   = document.getElementById('tbl');
+  const tbody = document.getElementById('tbl-body');
+
+  if (!total) { empty.style.display = 'block'; tbl.style.display = 'none'; return; }
+  empty.style.display = 'none'; tbl.style.display = 'table';
+
+  tbody.innerHTML = filtered.slice().reverse().map(r => {
+    const ok = r.score === 6;
+    return `<tr>
+      <td><strong>${r.qis}</strong></td>
+      <td title="${r.cliente}">${r.cliente}</td>
+      <td title="${r.tecnico}">${r.tecnico}</td>
+      <td>${r.fecha}</td>
+      <td title="${r.equipo_valor}" style="font-size:10px;color:var(--gray3)">${(r.equipo_valor||'').substring(0,22)}</td>
+      <td style="text-align:center;font-weight:700;color:${ok?'var(--gd)':'var(--red)'}">${r.score}/6</td>
+      <td style="text-align:center"><span class="badge ${ok?'pass':'fail'}">${ok?'✓ Completo':'✗ Incompleto'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── STATUS HELPERS ─────────────────────────────────────────────────────────────
+function showLoading(txt) {
+  document.getElementById('st-loading').style.display = 'flex';
+  document.getElementById('st-text').textContent = txt;
+  document.getElementById('st-error').style.display = 'none';
+  document.getElementById('st-warn').style.display  = 'none';
+}
+function hideStatus() {
+  document.getElementById('st-loading').style.display = 'none';
+  document.getElementById('st-error').style.display   = 'none';
+  document.getElementById('st-warn').style.display    = 'none';
+}
+function showError(msg) {
+  hideStatus();
+  const el = document.getElementById('st-error');
+  el.style.display = 'block'; el.textContent = msg;
+}
+
+// ── MAIN FLOW ─────────────────────────────────────────────────────────────────
+async function handleFile(file) {
+  if (!file || busy) return;
+  if (file.type !== 'application/pdf') { showError('Solo se aceptan archivos PDF.'); return; }
+
+  const cfg = getConfig();
+  if (!cfg.ak) { showError('Configura la API Key de Anthropic antes de analizar.'); return; }
+
+  busy = true;
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('dz-text').textContent = file.name;
+
+  try {
+    showLoading('Leyendo PDF...');
+    const text = await extractText(file);
+    if (text.length < 50) { showError('No se pudo extraer texto. El PDF puede ser una imagen escaneada.'); busy = false; return; }
+
+    showLoading('Analizando con IA...');
+    const res = await analyzeWithClaude(text, file.name);
+
+    showLoading('Guardando en Airtable...');
+    const score = [res.qis, res.equipo, res.trabajo, res.resultado, res.firma, res.prox].filter(Boolean).length;
+    const record = {
+      qis:         res.qis_valor   || (res.qis ? '✓' : '—'),
+      cliente:     res.cliente     || file.name,
+      tecnico:     res.firma_valor || '—',
+      fecha:       res.fecha       || '—',
+      equipo_valor:res.equipo_valor|| '—',
+      score,
+      fields: { qis: res.qis, equipo: res.equipo, trabajo: res.trabajo, resultado: res.resultado, firma: res.firma, prox: res.prox },
+      observacion: res.observacion || '',
+    };
+
+    await saveToAirtable(record);
+    records.push(record);
+    saveRecords();
+    buildMonthFilter();
+    renderTable(document.getElementById('month-filter').value);
+
+    hideStatus();
+    const ok = score === 6;
+    const card = document.getElementById('result-card');
+    card.className = 'result-card ' + (ok ? 'pass' : 'fail');
+    card.style.display = 'block';
+    document.getElementById('r-name').textContent = record.cliente;
+    document.getElementById('r-meta').textContent = 'QIS: ' + record.qis + ' · ' + record.tecnico + ' · ' + record.fecha;
+    const sc = document.getElementById('r-score');
+    sc.textContent = score + '/6';
+    sc.className = 'result-score ' + (ok ? 'score-pass' : 'score-fail');
+    document.getElementById('r-fields').innerHTML = FIELDS.map(f => {
+      const v = record.fields[f.k];
+      return `<div class="field-item ${v?'ok':'no'}">
+        <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          ${v ? '<polyline points="20 6 9 17 4 12"/>' : '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'}
+        </svg>
+        <span>${f.l}</span>
+      </div>`;
+    }).join('');
+    const obsEl = document.getElementById('r-obs');
+    if (record.observacion) { obsEl.style.display = 'block'; obsEl.textContent = record.observacion; }
+    else { obsEl.style.display = 'none'; }
+
+  } catch(e) {
+    showError('Error: ' + e.message);
+  } finally {
+    busy = false;
+    document.getElementById('file-input').value = '';
+  }
+}
+
+function resetAnalyzer() {
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('dz-text').textContent = 'Arrastra el PDF aquí o haz clic';
+  hideStatus();
+}
+
+// ── DROP ZONE ─────────────────────────────────────────────────────────────────
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadConfig();
+loadRecords();
+</script>
+</body>
+</html>
