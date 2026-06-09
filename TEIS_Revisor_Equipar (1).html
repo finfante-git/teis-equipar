@@ -131,9 +131,9 @@
       Configuración inicial
     </div>
     <div class="setup-field">
-      <label>Anthropic API Key</label>
-      <input type="password" id="anthropic-key" placeholder="sk-ant-..." autocomplete="off">
-      <div class="setup-hint">Obtén tu key en console.anthropic.com → API Keys. Se guarda solo en este navegador.</div>
+      <label>Google Gemini API Key</label>
+      <input type="password" id="anthropic-key" placeholder="AIza..." autocomplete="off">
+      <div class="setup-hint">Obtén tu key gratuita en aistudio.google.com → ícono de llave. Se guarda solo en este navegador.</div>
     </div>
     <div class="setup-field">
       <label>Airtable Personal Access Token</label>
@@ -298,7 +298,7 @@ async function extractText(file) {
 // ── CLAUDE API ─────────────────────────────────────────────────────────────────
 async function analyzeWithClaude(text, fileName) {
   const { ak } = getConfig();
-  if (!ak) throw new Error('Falta la API Key de Anthropic en configuración.');
+  if (!ak) throw new Error('Falta la API Key de Gemini en configuración.');
 
   const prompt = `Analiza este informe de servicio técnico de Equipar y devuelve SOLO JSON válido sin texto extra ni backticks:
 {"qis":bool,"qis_valor":"","equipo":bool,"equipo_valor":"marca/modelo/serie","trabajo":bool,"resultado":bool,"firma":bool,"firma_valor":"nombre","prox":bool,"prox_valor":"","cliente":"","fecha":"DD/MM/AA","observacion":""}
@@ -312,28 +312,23 @@ Criterios:
 REPORTE:
 ${text.substring(0, 3500)}`;
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${ak}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ak,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
-      system: 'Eres revisor de calidad. Responde SOLO con JSON válido.',
-      messages: [{role: 'user', content: prompt}]
+      contents: [{
+        parts: [{ text: 'Eres revisor de calidad. Responde SOLO con JSON válido, sin texto extra ni backticks.\n\n' + prompt }]
+      }],
+      generationConfig: { temperature: 0, maxOutputTokens: 600 }
     })
   });
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
-    throw new Error('Claude API ' + resp.status + ': ' + (err?.error?.message || resp.statusText));
+    throw new Error('Gemini API ' + resp.status + ': ' + (err?.error?.message || resp.statusText));
   }
   const data = await resp.json();
-  const raw = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   return JSON.parse(raw.replace(/```json|```/g, '').trim());
 }
 
@@ -469,7 +464,7 @@ async function handleFile(file) {
   if (file.type !== 'application/pdf') { showError('Solo se aceptan archivos PDF.'); return; }
 
   const cfg = getConfig();
-  if (!cfg.ak) { showError('Configura la API Key de Anthropic antes de analizar.'); return; }
+  if (!cfg.ak) { showError('Configura la API Key de Gemini antes de analizar.'); return; }
 
   busy = true;
   document.getElementById('result-card').style.display = 'none';
